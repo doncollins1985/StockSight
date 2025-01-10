@@ -1,7 +1,4 @@
-# StockSight
- The Profit Prophet
- 
- # FinBERT-LSTM: Stock Price Prediction Using News Sentiment Analysis
+# StockSight: The Profit Prophet - Stock Price Prediction Using News Sentiment Analysis
 
 This project implements the **FinBERT-LSTM model** for predicting stock prices. The model combines **financial news sentiment analysis** with **historical stock price data** using deep learning techniques like Long Short-Term Memory (LSTM) networks and the FinBERT NLP model. The project is inspired by the research paper [FinBERT-LSTM: Deep Learning based stock price prediction using News Sentiment Analysis](https://arxiv.org/abs/2211.07392).
 
