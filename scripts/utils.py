@@ -12,15 +12,23 @@ import tensorflow as tf
 from tensorflow.keras import regularizers
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import (
-    Input, Conv1D, MaxPooling1D, GRU, Dense, Dropout,
+    Input, Conv1D, GRU, Dense, Dropout,
     LayerNormalization, Bidirectional, MultiHeadAttention, Add,
-    SpatialDropout1D, LeakyReLU, Permute, Concatenate, Flatten, Reshape
+    SpatialDropout1D, LeakyReLU, Permute, Concatenate, Flatten, 				Reshape
 )
 from tensorflow.keras.callbacks import Callback
 from tensorflow.keras.optimizers import AdamW
 
 import joblib
 
+from keras_tuner import HyperParameters
+
+# Example custom metric for R^2 (not necessarily exact)
+def r2_keras(y_true, y_pred):
+    residual = y_true - y_pred
+    total = y_true - np.mean(y_true)
+    return 1 - (np.sum(residual**2) / np.sum(total**2))
+  
 # --- Helper Functions ---
 def load_config(config_path):
     """
@@ -253,9 +261,11 @@ def load_data(input_file, sequence_file, feature_columns, target_column, config)
 
     return X_train_scaled, y_train_scaled, X_val_scaled, y_val_scaled, X_test_scaled, y_test_scaled, feature_scaler, target_scaler
 
+
 def build_model(hp, input_shape):
     """
-    Build and compile a redesigned Keras model for future stock price prediction.
+    Build and compile a redesigned Keras model, accommodating both technical 
+    and sentiment-derived features. 
     """
     inputs = Input(shape=input_shape)
     x = inputs
@@ -290,7 +300,6 @@ def build_model(hp, input_shape):
             rate=hp.Float(f'tcn_dropout_rate_{i}', 0.1, 0.4, step=0.1, default=0.3)
         )(x_tcn)
 
-        # Residual Connection for matching dimensions
         if x_tcn.shape[-1] == x.shape[-1]:
             x = Add()([x, x_tcn])
         else:
@@ -315,7 +324,6 @@ def build_model(hp, input_shape):
             rate=hp.Float(f'gru_dropout_rate_{i}', 0.2, 0.5, step=0.1, default=0.3)
         )(x_gru)
 
-        # Residual Connection
         if x_gru.shape[-1] == x.shape[-1]:
             x = Add()([x, x_gru])
         else:
