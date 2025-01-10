@@ -255,46 +255,51 @@ def load_data(input_file, sequence_file, feature_columns, target_column, config)
 
 def build_model(hp, input_shape):
     """
-    Build and compile a Keras model with hyperparameters.
+    Build and compile a redesigned Keras model for future stock price prediction.
     """
     inputs = Input(shape=input_shape)
-
     x = inputs
 
-    # Tune the number of Conv1D layers
-    num_conv_layers = hp.Int('num_conv_layers', 2, 4, default=3)
-    for i in range(num_conv_layers):
+    # TCN-like Blocks for Initial Feature Extraction
+    num_tcn_blocks = hp.Int('num_tcn_blocks', 1, 3, default=2)
+    for i in range(num_tcn_blocks):
         filters = hp.Int(
-            f'conv_filters_{i}', min_value=32, max_value=256, step=32, default=64
+            f'tcn_filters_{i}',
+            min_value=32,
+            max_value=256,
+            step=32,
+            default=64
         )
         kernel_size = hp.Choice(
-            f'conv_kernel_size_{i}', values=[2, 3, 5], default=3
+            f'tcn_kernel_size_{i}',
+            values=[2, 3, 5],
+            default=3
         )
-        x_conv = Conv1D(
+        x_tcn = Conv1D(
             filters=filters,
             kernel_size=kernel_size,
-            padding='same',
+            dilation_rate=2 ** i,
+            padding='causal',
             kernel_regularizer=regularizers.l2(
-                hp.Float(f'conv_l2_reg_{i}', 1e-6, 1e-3, sampling='log', default=1e-4)
+                hp.Float(f'tcn_l2_reg_{i}', 1e-6, 1e-3, sampling='log', default=1e-4)
             )
         )(x)
-        x_conv = LeakyReLU(negative_slope=0.1)(x_conv)
-        x_conv = LayerNormalization()(x_conv)
-        x_conv = SpatialDropout1D(rate=hp.Float(f'conv_dropout_rate_{i}', 0.1, 0.4, step=0.1, default=0.3))(x_conv)
+        x_tcn = LeakyReLU(negative_slope=0.1)(x_tcn)
+        x_tcn = LayerNormalization()(x_tcn)
+        x_tcn = SpatialDropout1D(
+            rate=hp.Float(f'tcn_dropout_rate_{i}', 0.1, 0.4, step=0.1, default=0.3)
+        )(x_tcn)
 
-        # Residual Connection BEFORE Pooling
-        if i > 0 and x_conv.shape[-1] == x.shape[-1]:
-            x = Add()([x, x_conv])
+        # Residual Connection for matching dimensions
+        if x_tcn.shape[-1] == x.shape[-1]:
+            x = Add()([x, x_tcn])
         else:
-            x = x_conv
+            x = x_tcn
 
-        # Apply pooling
-        x = MaxPooling1D(pool_size=2)(x)
-
-    # Tune the number of GRU layers
-    num_gru_layers = hp.Int('num_gru_layers', 1, 2, default=2)
+    # GRU Layers
+    num_gru_layers = hp.Int('num_gru_layers', 1, 2, default=1)
     for i in range(num_gru_layers):
-        units = hp.Int(f'gru_units_{i}', min_value=64, max_value=256, step=64, default=128)
+        units = hp.Int(f'gru_units_{i}', 64, 256, step=64, default=128)
         x_gru = Bidirectional(
             GRU(
                 units=units,
@@ -306,68 +311,65 @@ def build_model(hp, input_shape):
         )(x)
         x_gru = LeakyReLU(negative_slope=0.1)(x_gru)
         x_gru = LayerNormalization()(x_gru)
-        x_gru = Dropout(rate=hp.Float(f'gru_dropout_rate_{i}', 0.2, 0.4, step=0.1, default=0.3))(x_gru)
+        x_gru = Dropout(
+            rate=hp.Float(f'gru_dropout_rate_{i}', 0.2, 0.5, step=0.1, default=0.3)
+        )(x_gru)
 
         # Residual Connection
-        if i > 0 and x_gru.shape[-1] == x.shape[-1]:
+        if x_gru.shape[-1] == x.shape[-1]:
             x = Add()([x, x_gru])
         else:
             x = x_gru
 
-
-    # Advanced Multi-Head Attention Layer (Sequence-wise Attention)
-    num_heads_seq = hp.Int('attention_num_heads_seq', 8, 16, step=2, default=8)
-    key_dim_seq = hp.Int('attention_key_dim_seq', 32, 128, step=32, default=64)
-    x_attn_seq = MultiHeadAttention(num_heads=num_heads_seq, key_dim=key_dim_seq, dropout=0.1)(x, x)
-    x = Add()([x, x_attn_seq])
+    # Single Multi-Head Attention (Temporal Focus)
+    num_heads = hp.Int('attention_num_heads', 2, 8, step=2, default=4)
+    key_dim = hp.Int('attention_key_dim', 16, 64, step=16, default=32)
+    x_attn = MultiHeadAttention(
+        num_heads=num_heads,
+        key_dim=key_dim,
+        dropout=0.1
+    )(x, x)
+    x = Add()([x, x_attn])
     x = LayerNormalization()(x)
     x = Dropout(0.3)(x)
 
-    # Feature-wise Attention
-    x_perm = Permute((2, 1))(x)  # Shape: (batch, features, time)
-    num_heads_feat = hp.Int('attention_num_heads_feat', 4, 8, step=2, default=4)
-    key_dim_feat = hp.Int('attention_key_dim_feat', 16, 64, step=16, default=32)
-    x_attn_feat = MultiHeadAttention(num_heads=num_heads_feat, key_dim=key_dim_feat, dropout=0.1)(x_perm, x_perm)
-    x_feat = Add()([x_perm, x_attn_feat])
-    x_feat = LayerNormalization()(x_feat)
-    x_feat = Dropout(0.3)(x_feat)
-    x_feat = Permute((2, 1))(x_feat)
-    
-    # Concatenate sequence-wise and feature-wise attention outputs
-    x = Concatenate()([x, x_feat])
+    # Flatten for Dense Layers
+    x = Flatten()(x)
 
-    # Add Flatten or Reshape
-    # Option 1: Flatten (if the time dimension is not important after this point)
-    # x = Flatten()(x)
-
-    # Option 2: Reshape (if you want to preserve a specific shape)
-    x = Reshape((-1,))(x)  # Reshape to (batch_size, features)
-
-    # Tune the number of Dense layers
-    num_dense_layers = hp.Int('num_dense_layers', 2, 8, default=4)
+    # Dense Layers
+    num_dense_layers = hp.Int('num_dense_layers', 1, 4, default=2)
     for j in range(num_dense_layers):
-        units = hp.Int(f'dense_units_{j}', min_value=64, max_value=512, step=32, default=256)
-        x = Dense(units=units, kernel_regularizer=regularizers.l2(
-            hp.Float(f'dense_l2_reg_{j}', 1e-6, 1e-3, sampling='log', default=1e-4)
-        ))(x)
+        units = hp.Int(
+            f'dense_units_{j}',
+            min_value=64,
+            max_value=512,
+            step=64,
+            default=128
+        )
+        x = Dense(
+            units=units,
+            kernel_regularizer=regularizers.l2(
+                hp.Float(f'dense_l2_reg_{j}', 1e-6, 1e-3, sampling='log', default=1e-4)
+            )
+        )(x)
         x = LeakyReLU(negative_slope=0.1)(x)
         x = LayerNormalization()(x)
-        x = Dropout(rate=hp.Float(f'dense_dropout_rate_{j}', 0.2, 0.4, step=0.1, default=0.3))(x)
+        x = Dropout(
+            rate=hp.Float(f'dense_dropout_rate_{j}', 0.1, 0.5, step=0.1, default=0.3)
+        )(x)
 
-    # Output layer
+    # Output Layer
     outputs = Dense(1, activation='linear', dtype='float32')(x)
 
-    model = Model(inputs=inputs, outputs=outputs)
-
-    # Tune the learning rate for the optimizer
+    # Optimizer and Compilation
     learning_rate = hp.Float('learning_rate', 1e-4, 1e-2, sampling='log', default=1e-3)
-
     optimizer = AdamW(
         learning_rate=learning_rate,
         weight_decay=hp.Float('weight_decay', 1e-5, 1e-3, sampling='log', default=1e-4),
         clipnorm=1.0
     )
 
+    model = Model(inputs=inputs, outputs=outputs)
     model.compile(
         optimizer=optimizer,
         loss='mae',
