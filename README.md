@@ -1,0 +1,2 @@
+# StockSight
+ The Profit Prophet
