@@ -316,30 +316,8 @@ class CosineAnnealingScheduler(Callback):
 
     def on_epoch_begin(self, epoch, logs=None):
         lr = self.compute_lr()
-<<<<<<< HEAD
-        logging.info(f"Epoch {epoch+1}: Computed learning rate: {lr}, type: {type(lr)}")
-        logging.info(f"Optimizer learning rate before setting: {self.model.optimizer.learning_rate} ({type(self.model.optimizer.learning_rate)})")
-        
-        try:
-            current_lr = self.model.optimizer.learning_rate.numpy()
-        except AttributeError:
-            current_lr = self.model.optimizer.learning_rate
-        logging.info(f"Current optimizer learning rate value: {current_lr}")
-        
-        if hasattr(self.model.optimizer.learning_rate, 'assign'):
-            self.model.optimizer.learning_rate.assign(lr)
-            logging.debug(f"Epoch {epoch+1}: Setting learning rate to {lr:.6f}")
-        else:
-            try:
-                tf.keras.backend.set_value(self.model.optimizer.learning_rate, lr)
-                logging.debug(f"Epoch {epoch+1}: Setting learning rate to {lr:.6f}")
-            except Exception as e:
-                logging.error(f"Failed to set learning rate: {e}")
-                raise
-=======
         tf.keras.backend.set_value(self.model.optimizer.lr, lr)
         logging.debug(f"Epoch {epoch+1}: Cosine annealing LR set to {lr:.6f}")
->>>>>>> 92e84d8b869c610628d9ca370ca20b57f60f4df3
 
     def compute_lr(self):
         if self.current_epoch >= self.T_i:

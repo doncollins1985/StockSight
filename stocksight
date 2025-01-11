@@ -4,7 +4,6 @@
 #================================
 """
 Orchestrates the entire pipeline:
-<<<<<<< HEAD
     1) Fetch stock data (yfinance + TA-Lib)  [subcommand: fetch]
     2) Fetch news data (NYT API)             [subcommand: news]
     3) Merge sentiment & create sequences    [subcommand: data]
@@ -15,16 +14,6 @@ Usage Examples:
     python main.py fetch --ticker ^GSPC --start 2025-01-01 --end 2025-06-01
     python main.py news --start 2025-01-01
     python main.py data --config config.json
-=======
-    1) Fetch stock data (stock.py)
-    2) Merge sentiment & create sequences (data.py)
-    3) Train the model (train.py)
-    4) Evaluate the model (evaluate.py)
-
-Usage:
-    python main.py fetch --ticker ^GSPC --start 2020-01-01 --end 2021-01-01 ...
-    python main.py data-setup --config config.json
->>>>>>> 92e84d8b869c610628d9ca370ca20b57f60f4df3
     python main.py train --config config.json
     python main.py evaluate --config config.json
 """
@@ -33,7 +22,6 @@ import argparse
 import logging
 import sys
 import os
-<<<<<<< HEAD
 import time
 import json
 import csv
@@ -44,10 +32,11 @@ import requests
 import pandas as pd
 
 # Import your existing scripts as modules:
-import scripts.stock as stock          # your stock.py
-import scripts.data as data            # your data.py
-import scripts.train as train          # your train.py
-import scripts.evaluate as evaluate    # your evaluate.py
+import scripts.stock as stock            # stock.py
+import scripts.data as data              # data.py
+import scripts.sentiments as sentiments  # sentimens.py
+import scripts.train as train            # train.py
+import scripts.evaluate as evaluate      # evaluate.py
 
 from scripts.utils import load_config
 from requests.adapters import HTTPAdapter
@@ -61,26 +50,12 @@ from tqdm import tqdm
 # ------------------------------------------------------------------------
 logging.basicConfig(
     level=logging.INFO,
-=======
-
-# We import these so we can call their "main" or their key functions
-import scripts.stock as stock          # stock.py
-import scripts.data as data            # data.py
-import scripts.train as train          # train.py
-import scripts.evaluate as evaluate    # evaluate.py
-
-from scripts.utils import load_config
-
-logging.basicConfig(
-    level=logging.WARN,
->>>>>>> 92e84d8b869c610628d9ca370ca20b57f60f4df3
     format='%(asctime)s [%(levelname)s] %(message)s',
     handlers=[
         logging.StreamHandler()
     ]
 )
 
-<<<<<<< HEAD
 # ------------------------------------------------------------------------
 # NEWS FETCHING LOGIC (formerly in news.py) 
 # Now integrated as a subcommand "news"
@@ -314,7 +289,7 @@ def run_news_subcommand(start_date_str: str) -> None:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Main script for entire pipeline: fetch, news, data, train, evaluate."
+        description="Main script for entire pipeline: fetch, news, data-setup, train, evaluate."
     )
     subparsers = parser.add_subparsers(dest='command', help='Sub-commands')
 
@@ -322,18 +297,6 @@ def main():
     # 1) FETCH (stock data) sub-command
     #-------------------------------------------#
     fetch_parser = subparsers.add_parser('fetch', help='Fetch stock data (yfinance + TA-Lib)')
-=======
-def main():
-    parser = argparse.ArgumentParser(
-        description="Main script that can fetch data, run data-setup, train, and evaluate."
-    )
-    subparsers = parser.add_subparsers(dest='command', help='Sub-commands')
-
-    #-------------------------#
-    # 1) FETCH sub-command
-    #-------------------------#
-    fetch_parser = subparsers.add_parser('fetch', help='Fetch stock data using yfinance + TA-Lib')
->>>>>>> 92e84d8b869c610628d9ca370ca20b57f60f4df3
     fetch_parser.add_argument("-s", "--start", type=str, default="1985-01-01",
                               help="Start date (YYYY-MM-DD). Default=1985-01-01")
     fetch_parser.add_argument("-i", "--interval", type=str, default="1d",
@@ -347,132 +310,104 @@ def main():
     fetch_parser.add_argument("-o", "--output", type=str, default=None,
                               help="Output CSV path. Default=data/stocks/<ticker>.csv")
 
-<<<<<<< HEAD
     #-------------------------------------------#
     # 2) NEWS sub-command
     #-------------------------------------------#
     news_parser = subparsers.add_parser('news', help='Fetch news articles from the NYT API')
-    news_parser.add_argument("-s", "--start", type=str, default="2025-01-01",
-                             help="Start date (YYYY-MM-DD) for news fetch. Default=2025-01-01")
+    news_parser.add_argument("-s", "--start", type=str, default="2024-12-20",
+                             help="Start date (YYYY-MM-DD) for news fetch. Default=2024-12-20")
 
     #-------------------------------------------#
-    # 3) DATA sub-command
+    # 3) DATA-SETUP sub-command
     #-------------------------------------------#
-    data_setup_parser = subparsers.add_parser('data', help='Merge sentiment & create sequences')
-    data_setup_parser.add_argument("--config", type=str, default="config.json",
-                                   help="Path to the data config file.")
-
-    #-------------------------------------------#
-    # 4) TRAIN sub-command
-    #-------------------------------------------#
-    train_parser = subparsers.add_parser('train', help='Train the model')
-    train_parser.add_argument("--config", type=str, default="config.json",
-                              help="Path to the training config file.")
-
-    #-------------------------------------------#
-    # 5) EVALUATE sub-command
-    #-------------------------------------------#
-    eval_parser = subparsers.add_parser('evaluate', help='Evaluate the model')
-    eval_parser.add_argument("--config", type=str, default="config.json",
-=======
-    #-------------------------#
-    # 2) DATA-SETUP sub-command
-    #-------------------------#
-    data_setup_parser = subparsers.add_parser('data-setup', help='Merge sentiment & create sequences')
+    data_setup_parser = subparsers.add_parser('data', help='Compute sentiments, merge data, create sequences')
     data_setup_parser.add_argument("-c", "--config", type=str, default="config.json",
-                                   help="Path to the data config file.")
+                              help="Path to the data config file.")
+    # Additional arguments for sentiment computation
+    data_setup_parser.add_argument("-x", "--cleaned", type=str, default=None,
+                              help="Path to save the cleaned CSV file for sentiments. If None, skip cleaning step.")
+    data_setup_parser.add_argument("-p", "--parallel", action='store_true',
+                              help="Enable parallel processing for FinBERT sentiment analysis.")
 
-    #-------------------------#
-    # 3) TRAIN sub-command
-    #-------------------------#
+    #-------------------------------------------------#
+    # 4) TRAIN sub-command
+    #-------------------------------------------------#
     train_parser = subparsers.add_parser('train', help='Train the model')
     train_parser.add_argument("-c", "--config", type=str, default="config.json",
                               help="Path to the training config file.")
 
-    #-------------------------#
-    # 4) EVALUATE sub-command
-    #-------------------------#
+    #-------------------------------------------------#
+    # 5) EVALUATE sub-command
+    #-------------------------------------------------#
     eval_parser = subparsers.add_parser('evaluate', help='Evaluate the model')
     eval_parser.add_argument("-c", "--config", type=str, default="config.json",
->>>>>>> 92e84d8b869c610628d9ca370ca20b57f60f4df3
-                             help="Path to the evaluation config file.")
+                              help="Path to the evaluation config file.")
 
+    #-------------------------------------------------#
+    # Parse and dispatch
+    #-------------------------------------------------#
     args = parser.parse_args()
-
-<<<<<<< HEAD
     if not args.command:
-=======
-    if args.command is None:
->>>>>>> 92e84d8b869c610628d9ca370ca20b57f60f4df3
         parser.print_help()
         sys.exit(1)
 
+    #---------------- FETCH sub-command ----------------#
     if args.command == 'fetch':
-<<<<<<< HEAD
-        # We reuse stock.py's logic 
         cfg = load_config(args.config)
-=======
-        # Reuse the logic from stock.py's main but pass in arguments manually
-        # Instead of rewriting logic, we directly call stock.fetch_stock_data 
-        # or we can call stock.main() with sys.argv. We'll do direct call:
-        config = load_config(args.config)
-
->>>>>>> 92e84d8b869c610628d9ca370ca20b57f60f4df3
         start_date = args.start
         interval = args.interval
         end_date = args.end
         ticker = args.ticker
-<<<<<<< HEAD
-        default_dir = cfg.get('data_dir', 'data/stocks')
+        default_dir = cfg.get('data_dir', 'data')
         os.makedirs(default_dir, exist_ok=True)
-        output_path = args.output if args.output else os.path.join(default_dir, f'{ticker}.csv')
-=======
-        # If user didn't provide output, auto-construct from config or default
-        default_dir = config.get('data_dir', 'data')
-        os.makedirs(default_dir, exist_ok=True)
-        output_path = args.output if args.output else config['stock_file']
->>>>>>> 92e84d8b869c610628d9ca370ca20b57f60f4df3
+        output_path = args.output if args.output else cfg['stock_file']
 
         success = stock.fetch_stock_data(ticker, start_date, end_date, interval, output_path)
         if success:
             logging.info("Data fetch & processing completed successfully.")
         else:
-<<<<<<< HEAD
             logging.error("Failed to fetch or process data.")
         sys.exit(0)
 
+    #---------------- NEWS sub-command ----------------#
     elif args.command == 'news':
-        # Our newly integrated news-collect logic
+        # Reuse a function from your existing code or a new function in main.py
         run_news_subcommand(args.start)
         sys.exit(0)
 
+    #---------------- DATA-SETUP sub-command ----------------#
     elif args.command == 'data':
-=======
-            logging.error("Failed to fetch/prepare data.")
-        sys.exit(0)
+        # 1) Compute sentiments
+        logging.info("Starting sentiment computation step (FinBERT) before data setup...")
 
-    elif args.command == 'data-setup':
-        # Let the data.py's main handle it
->>>>>>> 92e84d8b869c610628d9ca370ca20b57f60f4df3
+        # We load config here to get 'news_file', 'sentiment_file', etc.
+        cfg = load_config(args.config)
+        try:
+            sentiments.compute_sentiment(
+                input_file=cfg['news_file'],       # e.g. 'data/news_data.csv'
+                output_file=cfg['sentiment_file'], # e.g. 'data/news_sentiments.csv'
+                cleaned_file=args.cleaned,
+                batch_size=cfg.get('batch_size', 32),
+                parallel=args.parallel
+            )
+            logging.info("Sentiment computation completed successfully.")
+        except Exception as e:
+            logging.error(f"Sentiment computation failed: {e}")
+            sys.exit(1)
+
+        # 2) Merge sentiment with stock data & create sequences
+        logging.info("Proceeding with standard data setup (merging, sequences)...")
         data.main(args.config)
         sys.exit(0)
 
+    #---------------- TRAIN sub-command ----------------#
     elif args.command == 'train':
-<<<<<<< HEAD
         train.main()
         sys.exit(0)
 
+    #---------------- EVALUATE sub-command ----------------#
     elif args.command == 'evaluate':
         evaluate.main()
-=======
-        # Let train.py handle it
-        train.train_model(args.config)
-        sys.exit(0)
-
-    elif args.command == 'evaluate':
-        # Let evaluate.py handle it
-        evaluate.main(["--config", args.config])
->>>>>>> 92e84d8b869c610628d9ca370ca20b57f60f4df3
         sys.exit(0)
 
 
