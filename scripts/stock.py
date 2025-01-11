@@ -2,31 +2,36 @@
 #====================================
 #  stock.py
 #====================================
+"""
+Script to fetch stock data using yfinance, compute technical indicators
+using TA-Lib, and save the resulting CSV.
+"""
 
+import os
+import logging
+import argparse
+import talib
 import yfinance as yf
 import pandas as pd
 import numpy as np
-import os
-import logging
-from utils import load_config
 from datetime import datetime
-import talib
-from typing import Optional
-import argparse
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+from scripts.utils import load_config
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
+
 
 def calculate_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Calculate a suite of technical indicators using TA-Lib and append them to the DataFrame.
-
-    Args:
-        df (pd.DataFrame): DataFrame containing at least 'High', 'Low', 'Close', 'Volume' columns.
+    Calculate a suite of technical indicators using TA-Lib and append them to df.
+    Expects columns: ['Date', 'High', 'Low', 'Close', 'Volume'].
 
     Returns:
-        pd.DataFrame: DataFrame including calculated technical indicators.
+        DataFrame with new indicator columns appended.
     """
     required = {'High', 'Low', 'Close', 'Volume'}
     if not required.issubset(df.columns):
@@ -34,24 +39,21 @@ def calculate_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
         logger.error(f"DataFrame is missing required columns: {missing}")
         raise ValueError(f"Missing required columns: {missing}")
 
-    # Ensure 'Date' is present
     if 'Date' not in df.columns:
         logger.error("DataFrame is missing 'Date' column.")
         raise ValueError("Missing 'Date' column.")
 
-    # Ensure columns are float type for TA-Lib compatibility
+    # Convert to float for TA-Lib compatibility
     high = df['High'].astype(float)
     low = df['Low'].astype(float)
     close = df['Close'].astype(float)
     volume = df['Volume'].astype(float)
 
     try:
-        # Moving averages
+        # Simple/Exponential MAs
         df['SMA_5'] = talib.SMA(close, timeperiod=5)
         df['SMA_20'] = talib.SMA(close, timeperiod=20)
         df['SMA_50'] = talib.SMA(close, timeperiod=50)
-
-        # Exponential moving averages
         df['EMA_12'] = talib.EMA(close, timeperiod=12)
         df['EMA_26'] = talib.EMA(close, timeperiod=26)
 
@@ -70,24 +72,24 @@ def calculate_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
         df['BB_Middle'] = middle
         df['BB_Lower'] = lower
 
-        # Average True Range
+        # ATR
         df['ATR'] = talib.ATR(high, low, close, timeperiod=14)
 
-        # Stochastic Oscillator
+        # Stochastic
         stoch_k, stoch_d = talib.STOCH(high, low, close)
         df['STOCH_K'] = stoch_k
         df['STOCH_D'] = stoch_d
 
-        # On-Balance Volume
+        # OBV
         df['OBV'] = talib.OBV(close, volume)
 
         # Rate of Change
         df['ROC'] = talib.ROC(close, timeperiod=10)
 
-        # Average Directional Movement Index
+        # ADX
         df['ADX'] = talib.ADX(high, low, close, timeperiod=14)
 
-        # Commodity Channel Index
+        # CCI
         df['CCI'] = talib.CCI(high, low, close, timeperiod=14)
 
         # Williams %R
@@ -96,7 +98,7 @@ def calculate_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
         # Momentum
         df['MOM'] = talib.MOM(close, timeperiod=10)
 
-        # Percentage changes
+        # Price & Volume change
         df['Price_Change'] = close.pct_change()
         df['Volume_Change'] = volume.pct_change()
 
@@ -104,39 +106,30 @@ def calculate_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
         logger.error(f"Error calculating technical indicators: {e}")
         raise
 
+    # Check if essential indicators exist
     required_columns = [
-        'Date', 'Close', 'Volume', 'SMA_5', 'SMA_20', 'SMA_50', 'EMA_12', 'EMA_26',
-        'MACD', 'MACD_Signal', 'MACD_Hist', 'RSI', 'BB_Upper', 'BB_Middle', 'BB_Lower',
-        'ATR', 'STOCH_K', 'STOCH_D', 'OBV', 'ROC', 'ADX', 'CCI', 'WILLR', 'MOM',
-        'Price_Change', 'Volume_Change'
+        'Date', 'Close', 'SMA_5', 'SMA_20', 'SMA_50', 'EMA_12',
+        'EMA_26', 'MACD', 'MACD_Signal', 'RSI', 'BB_Middle',
+        'ATR', 'STOCH_K', 'STOCH_D', 'OBV', 'ROC', 'ADX', 'CCI',
+        'WILLR', 'MOM'
     ]
-
-    # Check if all required columns are present after calculations
     missing_cols = set(required_columns) - set(df.columns)
     if missing_cols:
-        logger.error(f"After calculations, DataFrame is missing columns: {missing_cols}")
+        logger.error(f"After calculations, missing columns: {missing_cols}")
         raise ValueError(f"Missing columns after calculations: {missing_cols}")
 
     return df[required_columns]
 
 
-def fetch_stock_data(ticker: str,
-                     start_date: str,
-                     end_date: str,
-                     interval: str,
-                     output_file: str) -> bool:
+def fetch_stock_data(
+    ticker: str,
+    start_date: str,
+    end_date: str,
+    interval: str,
+    output_file: str
+) -> bool:
     """
-    Fetch price data for a given ticker within a date range, calculate technical indicators, and save to CSV.
-
-    Args:
-        ticker (str): The ticker symbol (e.g. '^GSPC').
-        start_date (str): Start date in 'YYYY-MM-DD' format.
-        end_date (str): End date in 'YYYY-MM-DD' format.
-        interval (str): The data interval (default '1d').
-        output_file (str): The filepath to save the output CSV.
-
-    Returns:
-        bool: True if data was successfully fetched and saved, False otherwise.
+    Fetch price data for a given ticker from Yahoo Finance, compute indicators, save to CSV.
     """
     try:
         logger.info(
@@ -144,103 +137,95 @@ def fetch_stock_data(ticker: str,
         )
         os.makedirs(os.path.dirname(output_file), exist_ok=True)
 
-        # Download data using yfinance
+        # Download data
         stock = yf.Ticker(ticker)
-        data = stock.history(
-            start=start_date, end=end_date, interval=interval)
+        data = stock.history(start=start_date, end=end_date, interval=interval)
 
         if data.empty:
             logger.error(f"No data found for {ticker}.")
             return False
 
-        # Reset index to ensure datetime is a column
+        # Reset index so 'Date' is a column
         data.reset_index(inplace=True)
 
-        # Log the columns for debugging
-        logger.debug(f"Data columns after reset_index: {data.columns.tolist()}")
-
-        # Rename 'Datetime' to 'Date' if necessary
+        # Rename 'Datetime' to 'Date' if needed
         if 'Date' not in data.columns and 'Datetime' in data.columns:
             data.rename(columns={'Datetime': 'Date'}, inplace=True)
             logger.info("Renamed 'Datetime' column to 'Date'.")
-        elif 'Date' not in data.columns and 'Datetime' not in data.columns:
-            logger.error("DataFrame does not contain 'Date' or 'Datetime' columns.")
+
+        if 'Date' not in data.columns:
+            logger.error("DataFrame has no 'Date' or 'Datetime' columns.")
             return False
 
-        # Log the first few rows for debugging
-        logger.debug(f"Fetched data head:\n{data.head()}")
-
-        # Calculate technical indicators
+        # Calculate TA indicators
         data = calculate_technical_indicators(data)
 
-        # Handle NaN values: forward fill then backfill
+        # Fill NaNs
         data.ffill(inplace=True)
         data.bfill(inplace=True)
 
-        # Convert dates to string format and extract HH:MM
-        if 'Date' in data.columns and pd.api.types.is_datetime64_any_dtype(data['Date']):
-          if interval.endswith(('m', 'h')):
-            data['Date'] = data['Date'].dt.strftime('%Y-%m-%d %H:%M')
-          else:
-            data['Date'] = data['Date'].dt.strftime('%Y-%m-%d')
-
-        
-        # Add Name Column at the beginning
-        data.insert(0, 'Name', ticker)
+        # Convert date format depending on interval
+        if pd.api.types.is_datetime64_any_dtype(data['Date']):
+            if interval.endswith(('m', 'h')):  # intraday
+                data['Date'] = data['Date'].dt.strftime('%Y-%m-%d %H:%M')
+            else:
+                data['Date'] = data['Date'].dt.strftime('%Y-%m-%d')
 
         # Save to CSV
         data.to_csv(output_file, index=False)
-        logger.info(f"Data successfully saved to {output_file}")
+        logger.info(f"Data saved to {output_file}")
 
-        # Log summary statistics
+        # Log summary
         logger.info(f"Total rows: {len(data)}")
-        logger.info(
-            f"Date range: {data['Date'].iloc[0]} to {data['Date'].iloc[-1]}"
-        )
-        logger.info(
-            f"Close price range: ${data['Close'].min():.2f} to ${data['Close'].max():.2f}"
-        )
+        logger.info(f"Date range: {data['Date'].iloc[0]} to {data['Date'].iloc[-1]}")
+        logger.info(f"Close price range: {data['Close'].min():.2f} to {data['Close'].max():.2f}")
         logger.info(f"Columns included: {', '.join(data.columns)}")
-
         return True
 
     except Exception as e:
-        logger.error(f"Error fetching and processing data for {ticker}: {e}")
+        logger.error(f"Error fetching data for {ticker}: {e}")
         return False
 
 
-def main() -> None:
-    """
-    Main function to execute data fetching and processing for a given stock ticker.
-    """
+def main():
     parser = argparse.ArgumentParser(description="Fetch and process stock data.")
-    parser.add_argument("-s", "--start", type=str, default="1985-01-01", help="Start date in '%Y-%m-%d' format (default: 1985-01-01)")
-    parser.add_argument("-i", "--interval", type=str, default="1d", help="Data interval (default: 1d)")
-    parser.add_argument("-c", "--config", type=str, default="config.json", help="Path to the config file (default: config.json)")
-    parser.add_argument("-e", "--end", type=str, default=None, help="End date in '%Y-%m-%d' format (default: current date)")
-    parser.add_argument("-t", "--ticker", type=str, default="^GSPC", help="Stock ticker (default: ^GSPC)")
-    parser.add_argument("-o", "--output", type=str, default=None, help="Output CSV file path (default: data/<ticker>.csv)")
+    parser.add_argument(
+        "-s", "--start", type=str, default="1985-01-01",
+        help="Start date (YYYY-MM-DD). Default: 1985-01-01"
+    )
+    parser.add_argument(
+        "-i", "--interval", type=str, default="1d",
+        help="Data interval. Default: 1d (daily)."
+    )
+    parser.add_argument(
+        "-c", "--config", type=str, default="config.json",
+        help="Path to the config file. Default: config.json"
+    )
+    parser.add_argument(
+        "-e", "--end", type=str, default=None,
+        help="End date (YYYY-MM-DD). Default: current date"
+    )
+    parser.add_argument(
+        "-t", "--ticker", type=str, default="^GSPC",
+        help="Ticker symbol. Default: ^GSPC"
+    )
+    parser.add_argument(
+        "-o", "--output", type=str, default=None,
+        help="Output CSV file path. Default: data/<ticker>.csv"
+    )
 
     args = parser.parse_args()
 
     config = load_config(args.config)
 
-    # Use command line arguments if provided, otherwise use config file or defaults
     start_date = args.start
     interval = args.interval
     end_date = args.end if args.end else datetime.now().strftime("%Y-%m-%d")
     ticker = args.ticker
-    output_path = args.output if args.output else os.path.join(config.get('data_dir', 'data/stocks'), f'{ticker}.csv')
 
-    # Check TA-Lib availability
-    try:
-        import talib  # noqa: F401
-    except ImportError:
-        logger.error("TA-Lib not installed. Please install TA-Lib first.")
-        logger.error(
-            "Installation instructions: https://github.com/mrjbq7/ta-lib"
-        )
-        return
+    default_dir = config.get('data_dir', 'data')
+    os.makedirs(default_dir, exist_ok=True)
+    output_path = args.output if args.output else config['stock_file']
 
     success = fetch_stock_data(ticker, start_date, end_date, interval, output_path)
     if success:
@@ -251,3 +236,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

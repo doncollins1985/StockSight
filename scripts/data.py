@@ -1,6 +1,12 @@
+#!/usr/bin/env python
 #================================
 #  data.py
 #================================
+"""
+Script to:
+1) Merge stock data with sentiment data.
+2) Create scaled sequences for model training.
+"""
 
 import os
 import logging
@@ -9,50 +15,46 @@ import pandas as pd
 import argparse
 import joblib
 
-from utils import (
+from scripts.utils import (
     load_config, validate_files, log_time,
     scale_data, save_scalers
 )
 
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[
+        logging.FileHandler("data_setup.log"),
+        logging.StreamHandler()
+    ]
+)
+
+
 @log_time
 def merge_sentiment_with_stock(input_file: str, sentiment_file: str, output_file: str) -> None:
     """
-    Merge stock data with sentiment data and save the merged dataset.
+    Merge stock data with sentiment data on 'Date' and save the merged dataset.
 
-    Parameters:
-        input_file (str): Path to the stock data CSV file.
-        sentiment_file (str): Path to the sentiment data CSV file.
-        output_file (str): Path where the merged data will be saved.
+    Args:
+        input_file: Path to the stock data CSV
+        sentiment_file: Path to the sentiment data CSV
+        output_file: Path to save the merged dataset
     """
     logging.info(f"Merging '{input_file}' with sentiment '{sentiment_file}' -> '{output_file}'")
-
-    # Validate input files
     validate_files([input_file, sentiment_file])
 
     # Load datasets
-    try:
-        stock_data = pd.read_csv(input_file, parse_dates=['Date'])
-        logging.info(f"Loaded stock data from {input_file}")
-    except Exception as e:
-        logging.error(f"Failed to load stock data: {e}")
-        raise
+    stock_data = pd.read_csv(input_file, parse_dates=['Date'])
+    logging.info(f"Loaded stock data from {input_file}")
 
-    try:
-        sentiment_data = pd.read_csv(sentiment_file, parse_dates=['Date'])
-        logging.info(f"Loaded sentiment data from {sentiment_file}")
-    except Exception as e:
-        logging.error(f"Failed to load sentiment data: {e}")
-        raise
+    sentiment_data = pd.read_csv(sentiment_file, parse_dates=['Date'])
+    logging.info(f"Loaded sentiment data from {sentiment_file}")
 
     # Merge on Date
-    try:
-        merged_data = pd.merge(stock_data, sentiment_data, on='Date', how='left')
-        logging.info("Merged data on 'Date'")
-    except KeyError as e:
-        logging.error(f"Merge failed: {e}")
-        raise
+    merged_data = pd.merge(stock_data, sentiment_data, on='Date', how='left')
+    logging.info("Merged data on 'Date'")
 
-    # Fill missing sentiment data with neutral values
+    # Fill missing sentiment with neutral values
     fill_values = {
         'Positive': 0,
         'Negative': 0,
@@ -62,7 +64,7 @@ def merge_sentiment_with_stock(input_file: str, sentiment_file: str, output_file
     merged_data.fillna(fill_values, inplace=True)
     logging.info("Filled missing sentiment data with default neutral values.")
 
-    # Ensure output directory exists
+    # Ensure output directory
     output_dir = os.path.dirname(output_file)
     if output_dir and not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -75,13 +77,24 @@ def merge_sentiment_with_stock(input_file: str, sentiment_file: str, output_file
 
 @log_time
 def create_sequences_with_sentiment(
-    input_file: str, output_file: str,
-    feature_columns: list, window_size: int,
-    scaler_path_X: str, scaler_path_y: str
-):
+    input_file: str,
+    output_file: str,
+    feature_columns: list,
+    window_size: int,
+    scaler_path_X: str,
+    scaler_path_y: str
+) -> None:
     """
-    Create sequences for time-series data (including sentiment columns),
+    Create sequences (sliding windows) for time-series data (including sentiment),
     scale them, and save to a .npz file.
+
+    Args:
+        input_file: Path to merged stock+sentiment CSV
+        output_file: Path to save the .npz with 'features' & 'labels'
+        feature_columns: List of columns to include in each window
+        window_size: Number of timesteps per sequence
+        scaler_path_X: Where to save the fitted feature scaler
+        scaler_path_y: Where to save the fitted target scaler
     """
     if not os.path.exists(input_file):
         logging.error(f"Input file {input_file} does not exist.")
@@ -95,7 +108,7 @@ def create_sequences_with_sentiment(
     if target_column_name not in data.columns:
         raise ValueError(f"Target column '{target_column_name}' not found in data.")
 
-    # Check for missing feature columns
+    # Check missing feature columns
     missing_cols = set(feature_columns) - set(data.columns)
     if missing_cols:
         logging.error(f"Missing columns in data: {missing_cols}")
@@ -116,34 +129,26 @@ def create_sequences_with_sentiment(
     ])
     y = features_scaled[window_size:, target_idx]
 
-    # Ensure output directory exists
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
 
-    # Save sequences and labels
+    # Save sequences
     np.savez(output_file, features=X, labels=y)
     logging.info(f"Sequences saved to {output_file}")
 
-    # Ensure the scaler directory exists
+    # Save scalers
     os.makedirs(os.path.dirname(scaler_path_X), exist_ok=True)
     os.makedirs(os.path.dirname(scaler_path_y), exist_ok=True)
-
-    # Save scalers
     save_scalers(feature_scaler, target_scaler, scaler_path_X, scaler_path_y)
 
 
-def main(config_path: str):
+def main(config_path: str) -> None:
     """
-    Orchestrates the data preparation steps:
-    1) Merge stock data with sentiment data
-    2) Create scaled sequences for model training
+    Orchestrate data preparation:
+    1) Merge sentiment with stock data
+    2) Create scaled sequences
     """
-    try:
-        config = load_config(config_path)
-    except Exception as e:
-        logging.error(f"Failed to load configuration: {e}")
-        raise
+    config = load_config(config_path)
 
-    # Validate necessary config keys
     required_keys = [
         'stock_file', 'sentiment_file', 'merged_file',
         'sequence_file', 'feature_columns', 'window_size',
@@ -177,24 +182,13 @@ def main(config_path: str):
 
 
 if __name__ == "__main__":
-    # Configure logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s [%(levelname)s] %(message)s',
-        handlers=[
-            logging.FileHandler("data_setup.log"),
-            logging.StreamHandler()
-        ]
-    )
-
-    parser = argparse.ArgumentParser(description="End-to-end data setup script.")
+    parser = argparse.ArgumentParser(description="Data setup script.")
     parser.add_argument(
-        "--config",
-        type=str,
-        default="config.json",
-        help="Path to the configuration JSON file."
+        "--config", 
+        type=str, 
+        default="config.json", 
+        help="Path to the JSON configuration file."
     )
     args = parser.parse_args()
-
     main(args.config)
 
