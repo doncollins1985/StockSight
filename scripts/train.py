@@ -135,7 +135,7 @@ mixed_precision.set_global_policy('mixed_float16')
 
 
 @log_time
-def perform_hyperparameter_tuning(X_train, y_train, X_val, y_val, input_shape, scaler_y,
+def perform_hyperparameter_tuning(X_train, y_train, X_val, y_val, input_shape, scaler_X, scaler_y,
                                   tuner_dir='logs', config=None):
     """
     Perform hyperparameter tuning using Keras Tuner (Bayesian Optimization).
@@ -150,7 +150,6 @@ def perform_hyperparameter_tuning(X_train, y_train, X_val, y_val, input_shape, s
         project_name='stock_price_prediction',
         overwrite=True
     )
-
     stop_early = EarlyStopping(
         monitor='val_loss',
         patience=25,
@@ -183,7 +182,7 @@ def perform_hyperparameter_tuning(X_train, y_train, X_val, y_val, input_shape, s
 
 @log_time
 def train_final_model(X_train, y_train, X_val, y_val, best_hps, input_shape,
-                      combined_metric_callback, scaler_y, config):
+                      combined_metric_callback, scaler_X, scaler_y, config):
     """
     Train the final model with best hyperparams from tuner. 
     Resumes from checkpoint if it exists.
@@ -205,10 +204,10 @@ def train_final_model(X_train, y_train, X_val, y_val, best_hps, input_shape,
 
     initial_lr = best_hps.get('learning_rate')
     early_stopping = EarlyStopping(
-        monitor='val_loss',
+        monitor='val_combined_metric',
         patience=config["early_stopping_patience"],
         restore_best_weights=True,
-        mode='min',
+        mode='max',
         verbose=1
     )
 
@@ -216,14 +215,14 @@ def train_final_model(X_train, y_train, X_val, y_val, best_hps, input_shape,
         early_stopping,
         ModelCheckpoint(
             filepath=checkpoint_filepath,
-            monitor='val_loss',
+            monitor='val_combined_metric',
             save_best_only=True,
             save_weights_only=False,
-            mode='min',
+            mode='max',
             verbose=1
         ),
         ReduceLROnPlateau(
-            monitor='val_loss',
+            monitor='val_combined_metric',
             factor=config["reduce_lr_factor"],
             patience=config["reduce_lr_patience"],
             min_lr=config["reduce_lr_min_lr"],
@@ -260,7 +259,7 @@ def train_final_model(X_train, y_train, X_val, y_val, best_hps, input_shape,
             weight_decay=best_hps.get('weight_decay'),
             clipnorm=1.0
         )
-        model.compile(optimizer=optimizer, loss='mae', metrics=['mae', 'mape', r2_keras])
+        model.compile(optimizer=optimizer, loss='mse', metrics=['mae', 'mape', r2_keras])
 
         if os.path.exists(epoch_tracker_filepath):
             with open(epoch_tracker_filepath, 'r') as f:
@@ -287,7 +286,7 @@ def train_final_model(X_train, y_train, X_val, y_val, best_hps, input_shape,
 
 
 @log_time
-def evaluate_and_visualize(model, X_test, y_test, scaler_y, config):
+def evaluate_and_visualize(model, X_test, y_test, scaler_X, scaler_y, config):
     """
     Generate predictions on X_test, calculate metrics, and plot results.
     """
@@ -411,14 +410,13 @@ def plot_training_history(history_file: str) -> None:
     plt.ylabel('R²')
     plt.legend()
 
-    # 4) Loss
-    #   If you want to see combined_metric, rename keys or store them differently.
+    # 4) Combined Metric
     plt.subplot(1, 4, 4)
-    plt.plot(epochs, history['loss'], 'b-', label='Train Loss')
-    plt.plot(epochs, history['val_loss'], 'r-', label='Val Loss')
-    plt.title('Loss')
+    plt.plot(epochs, history['combined_metric'], 'b-', label='Training Combined Metric')
+    plt.plot(epochs, history['val_combined_metric'], 'r-', label='Validation Combined Metric')
+    plt.title('Combined Metric')
     plt.xlabel('Epochs')
-    plt.ylabel('Loss')
+    plt.ylabel('Combined Metric')
     plt.legend()
 
     plt.tight_layout()
@@ -451,15 +449,15 @@ def train_model(config: dict) -> None:
 
     input_shape = (X_train.shape[1], X_train.shape[2])
     # Tuning
-    best_hps, tuner, combined_cb = perform_hyperparameter_tuning(
-        X_train, y_train, X_val, y_val, input_shape, scaler_y,
+    best_hps, tuner, combined_callback = perform_hyperparameter_tuning(
+        X_train, y_train, X_val, y_val, input_shape, scaler_X, scaler_y,
         tuner_dir='logs', config=config
     )
 
     # Final train
     final_model, history = train_final_model(
         X_train, y_train, X_val, y_val,
-        best_hps, input_shape, combined_cb, scaler_y, config
+        best_hps, input_shape, combined_callback, scaler_X, scaler_y, config
     )
 
     # Save model

@@ -1,60 +1,123 @@
 #!/usr/bin/env python3
-
-#====================================
-#  sentiments.py
-#=====================================
+# compute_sentiments.py
 
 import os
 import csv
 import json
 import ast
 import logging
+import logging.handlers
 from transformers import BertTokenizer, TFBertForSequenceClassification, pipeline
 import pandas as pd
 from tqdm import tqdm
-from multiprocessing import cpu_count, Pool
+from multiprocessing import cpu_count, Pool, Queue, Process, current_process
 from scripts.utils import load_config
+import sys
+import time
+import colorlog  # Import colorlog for colored logging
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler("compute_sentiments.log"),
-        logging.StreamHandler()
-    ]
-)
-config = load_config('config.json')
+# Global variable to hold the NLP model in each worker
+nlp = None
+
+def listener_configurer(log_file='compute_sentiments.log'):
+    """
+    Configures the listener logger to write log records to a file and the console with colors.
+    
+    Args:
+        log_file (str): Path to the log file.
+    """
+    root = logging.getLogger()
+    formatter = colorlog.ColoredFormatter(
+        "%(log_color)s%(asctime)s - %(levelname)s - %(processName)s - %(message)s",
+        datefmt=None,
+        reset=True,
+        log_colors={
+            'DEBUG':    'cyan',
+            'INFO':     'green',
+            'WARNING':  'yellow',
+            'ERROR':    'red',
+            'CRITICAL': 'bold_red',
+        },
+        secondary_log_colors={},
+        style='%'
+    )
+    
+    # File Handler (No color)
+    file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(processName)s - %(message)s')
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setFormatter(file_formatter)
+    
+    # Console Handler (With color)
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
+    
+    root.addHandler(file_handler)
+    root.addHandler(console_handler)
+
+def listener_process(queue, log_file):
+    """
+    The listener process that receives log records from the queue and logs them.
+    
+    Args:
+        queue (Queue): Multiprocessing queue for log records.
+        log_file (str): Path to the log file.
+    """
+    listener_configurer(log_file)
+    while True:
+        try:
+            record = queue.get()
+            if record is None:
+                # Sentinel received, terminate listener
+                break
+            logger = logging.getLogger(record.name)
+            logger.handle(record)
+        except Exception:
+            import sys
+            import traceback
+            print('Problem handling log record:', file=sys.stderr)
+            traceback.print_exc(file=sys.stderr)
 
 def load_model(batch_size=32):
     """
     Load the pre-trained FinBERT model and tokenizer.
-    
+
     Args:
         batch_size (int): Number of samples per batch for sentiment analysis.
-    
+
     Returns:
         pipeline: Hugging Face transformers pipeline for sentiment analysis.
     """
-    logging.info("Loading FinBERT model and tokenizer...")
-    tokenizer = BertTokenizer.from_pretrained('ProsusAI/finbert')
-    model = TFBertForSequenceClassification.from_pretrained('ProsusAI/finbert')
-    nlp = pipeline('sentiment-analysis', model=model, tokenizer=tokenizer, batch_size=batch_size)
-    logging.info("Model and tokenizer loaded successfully.")
-    return nlp
+    logger = logging.getLogger(__name__)
+    logger.info("Loading FinBERT model and tokenizer...")
+    tokenizer = BertTokenizer.from_pretrained('yiyanghkust/finbert-tone')
+    model = TFBertForSequenceClassification.from_pretrained('yiyanghkust/finbert-tone')
+    nlp_pipeline = pipeline('sentiment-analysis', model=model, tokenizer=tokenizer, batch_size=batch_size)
+    logger.info("Model and tokenizer loaded successfully.")
+    return nlp_pipeline
 
-batch_size = config['batch_size']
-nlp = load_model(batch_size)
+def initializer(batch_size, queue):
+    """
+    Initializer function for each worker in the multiprocessing pool.
+    Sets up the logger to use the logging queue and loads the NLP model.
 
-def clean_csv(input_file, cleaned_file):
+    Args:
+        batch_size (int): Number of samples per batch for sentiment analysis.
+        queue (Queue): Multiprocessing queue for log records.
+    """
+    global nlp
+    nlp = load_model(batch_size)
+
+def clean_csv(input_file, cleaned_file, queue):
     """
     Clean the CSV by ensuring proper quoting and removing malformed lines.
-    
+
     Args:
         input_file (str): Path to the original CSV file.
         cleaned_file (str): Path to save the cleaned CSV file.
+        queue (Queue): Multiprocessing queue for log records.
     """
-    logging.info(f"Starting CSV cleaning: {input_file} -> {cleaned_file}")
+    logger = logging.getLogger(__name__)
+    logger.info(f"Starting CSV cleaning: {input_file} -> {cleaned_file}")
     with open(input_file, 'r', encoding='utf-8') as infile, \
          open(cleaned_file, 'w', encoding='utf-8', newline='') as outfile:
         reader = csv.reader(infile)
@@ -66,20 +129,22 @@ def clean_csv(input_file, cleaned_file):
             if len(row) >= 2:
                 writer.writerow(row)
             else:
-                logging.warning(f"Skipping malformed line {i}: {row}")
-    logging.info("CSV cleaning completed.")
+                logger.warning(f"Skipping malformed line {i}: {row}")
+    logger.info("CSV cleaning completed.")
 
-def parse_articles(articles_str):
+def parse_articles(articles_str, queue=None):
     """
     Parse the 'Articles' string from the CSV into a list.
     Attempts JSON parsing first, then falls back to ast.literal_eval.
-    
+
     Args:
         articles_str (str): String representation of articles.
-    
+        queue (Queue, optional): Multiprocessing queue for log records.
+
     Returns:
         list: List of articles.
     """
+    logger = logging.getLogger(__name__)
     if pd.isna(articles_str):
         return []
     try:
@@ -90,22 +155,22 @@ def parse_articles(articles_str):
             # Fallback to literal_eval
             return ast.literal_eval(articles_str)
         except (ValueError, SyntaxError) as e:
-            logging.error(f"Error parsing Articles: {e} | Data: {articles_str}")
+            logger.error(f"Error parsing Articles: {e} | Data: {articles_str}")
             return []
 
-def analyze_sentiments(nlp, articles):
+def analyze_sentiments(articles):
     """
     Perform sentiment analysis on a list of articles.
     Returns the proportion of positive, negative, and neutral sentiments,
     along with an aggregate score.
-    
+
     Args:
-        nlp (pipeline): Sentiment analysis pipeline.
         articles (list): List of article texts.
-    
+
     Returns:
         tuple: (positive_ratio, negative_ratio, neutral_ratio, aggregate_score)
     """
+    logger = logging.getLogger(__name__)
     if not articles:
         return 0.0, 0.0, 0.0, 0.0
     try:
@@ -117,77 +182,99 @@ def analyze_sentiments(nlp, articles):
         aggregate_score = pos - neg  # Example: Positive minus Negative
         return pos, neg, neu, aggregate_score
     except Exception as e:
-        logging.error(f"Error during sentiment analysis: {e}")
+        logger.error(f"Error during sentiment analysis: {e}")
         return 0.0, 0.0, 0.0, 0.0
 
 def process_row(row):
     """
     Process a single row of data to compute sentiment.
-    """
-    batch_size = config['batch_size']
-    nlp = load_model(batch_size)
-    date = row['Date']
-    articles = row['Parsed_Articles']
-    pos, neg, neu, agg = analyze_sentiments(nlp, articles)
-    return {
-        'Date': date,
-        'Positive': pos,
-        'Negative': neg,
-        'Neutral': neu,
-        'Aggregate_Score': agg
-    }
+    Assumes that the NLP model has been loaded globally.
 
-def remove_duplicates(news_data):
+    Args:
+        row (dict): A dictionary representing a row from the grouped DataFrame.
+
+    Returns:
+        dict: Sentiment analysis results for the row.
+    """
+    logger = logging.getLogger(__name__)
+    try:
+        date = row['Date']
+        articles = row['Parsed_Articles']
+        pos, neg, neu, agg = analyze_sentiments(articles)
+        return {
+            'Date': date,
+            'Positive': pos,
+            'Negative': neg,
+            'Neutral': neu,
+            'Aggregate_Score': agg
+        }
+    except Exception as e:
+        logger.error(f"Error processing row for date {row.get('Date', 'Unknown')}: {e}")
+        return {
+            'Date': row.get('Date', 'Unknown'),
+            'Positive': None,
+            'Negative': None,
+            'Neutral': None,
+            'Aggregate_Score': None
+        }
+
+def remove_duplicates(news_data, queue):
     """
     Remove duplicate articles based on 'Date' and 'Articles'.
-    
+
     Args:
         news_data (DataFrame): Pandas DataFrame containing news data.
-    
+        queue (Queue): Multiprocessing queue for log records.
+
     Returns:
         DataFrame: Deduplicated DataFrame.
     """
+    logger = logging.getLogger(__name__)
     initial_count = news_data.shape[0]
     news_data = news_data.drop_duplicates(subset=['Date', 'Articles'])
     final_count = news_data.shape[0]
-    logging.info(f"Removed {initial_count - final_count} duplicate rows.")
+    logger.info(f"Removed {initial_count - final_count} duplicate rows.")
     return news_data
 
-def handle_missing_values(news_data):
+def handle_missing_values(news_data, queue):
     """
     Handle missing values in the DataFrame by removing rows with missing 'Date' or 'Articles'.
-    
+
     Args:
         news_data (DataFrame): Pandas DataFrame containing news data.
-    
+        queue (Queue): Multiprocessing queue for log records.
+
     Returns:
         DataFrame: Cleaned DataFrame with no missing 'Date' or 'Articles'.
     """
+    logger = logging.getLogger(__name__)
     initial_count = news_data.shape[0]
     news_data = news_data.dropna(subset=['Date', 'Articles'])
     final_count = news_data.shape[0]
-    logging.info(f"Removed {initial_count - final_count} rows with missing 'Date' or 'Articles'.")
+    logger.info(f"Removed {initial_count - final_count} rows with missing 'Date' or 'Articles'.")
     return news_data
 
-def compute_sentiment(input_file, output_file, cleaned_file=None, batch_size=32, parallel=False):
+def compute_sentiment(input_file, output_file, cleaned_file=None, batch_size=32, parallel=False, queue=None):
     """
     Main function to compute sentiment scores per date.
     Aggregates all articles for each date before analysis.
-    
+
     Args:
         input_file (str): Path to the input CSV file.
         output_file (str): Path to save the output sentiment CSV.
         cleaned_file (str, optional): Path to save the cleaned CSV. Defaults to None.
         batch_size (int, optional): Batch size for sentiment analysis. Defaults to 32.
         parallel (bool, optional): Whether to use parallel processing. Defaults to False.
+        queue (Queue, optional): Multiprocessing queue for log records.
     """ 
+    logger = logging.getLogger(__name__)
     # Step 1: Clean the CSV if a cleaned_file path is provided
     if cleaned_file:
-        clean_csv(input_file, cleaned_file)
+        clean_csv(input_file, cleaned_file, queue)
         data_file = cleaned_file
     else:
         data_file = input_file
-    
+
     # Step 2: Read the CSV with appropriate parameters
     try:
         news_data = pd.read_csv(
@@ -200,77 +287,78 @@ def compute_sentiment(input_file, output_file, cleaned_file=None, batch_size=32,
             on_bad_lines='warn',
             encoding='utf-8'
         )
-        logging.info(f"Successfully read input file: {data_file}")
+        logger.info(f"Successfully read input file: {data_file}")
     except pd.errors.ParserError as e:
-        logging.error(f"ParserError: {e}")
+        logger.error(f"ParserError: {e}")
         return
     except Exception as e:
-        logging.error(f"Unexpected error reading CSV: {e}")
+        logger.error(f"Unexpected error reading CSV: {e}")
         return
-    
-    logging.info(f"Columns in CSV: {news_data.columns.tolist()}")
-    
+
+    logger.info(f"Columns in CSV: {news_data.columns.tolist()}")
+
     # Step 3: Validate required columns
     required_columns = {'Date', 'Articles'}
     if not required_columns.issubset(news_data.columns):
         missing = required_columns - set(news_data.columns)
-        logging.error(f"Input file is missing required columns: {missing}")
+        logger.error(f"Input file is missing required columns: {missing}")
         return
-    
+
     # Step 4: Data Cleaning
-    news_data = remove_duplicates(news_data)
-    news_data = handle_missing_values(news_data)
-    
+    news_data = remove_duplicates(news_data, queue)
+    news_data = handle_missing_values(news_data, queue)
+
     # Step 5: Parse the 'Articles' column into lists
     news_data['Parsed_Articles'] = news_data['Articles'].apply(parse_articles)
-    
+
     # Step 6: Group by 'Date' and aggregate all articles for each date
     grouped = news_data.groupby('Date')['Parsed_Articles'].apply(
         lambda lists: [article for sublist in lists for article in sublist]
     ).reset_index()
-    
-    logging.info(f"Aggregated articles by date. Total unique dates: {grouped.shape[0]}")
-    
+
+    logger.info(f"Aggregated articles by date. Total unique dates: {grouped.shape[0]}")
+
     # Optional: Log a sample of the aggregated data
     if not grouped.empty:
         sample_date = grouped['Date'].iloc[0]
         sample_articles = grouped['Parsed_Articles'].iloc[0]
-        logging.info(f"Sample 'Articles' for {sample_date}: {sample_articles[:2]}{'...' if len(sample_articles) > 2 else ''}")
-    
+        logger.info(f"Sample 'Articles' for {sample_date}: {sample_articles[:2]}{'...' if len(sample_articles) > 2 else ''}")
+
     # Step 7: Perform Sentiment Analysis
     sentiments = []
-    
+
     if parallel:
-        logging.info("Starting sentiment analysis with parallel processing...")
-        # Define a helper function for parallel processing
-        with Pool(processes=cpu_count()) as pool:
-            sentiments = list(tqdm(pool.imap(process_row, [row for _, row in grouped.iterrows()]), total=grouped.shape[0], desc="Processing dates"))
+        logger.info("Starting sentiment analysis with parallel processing...")
+        try:
+            with Pool(
+                processes=cpu_count(),
+                initializer=initializer,
+                initargs=(batch_size, queue)
+            ) as pool:
+                # Convert DataFrame rows to dictionaries for easier handling
+                rows = grouped.to_dict('records')
+                for sentiment in tqdm(pool.imap(process_row, rows), total=grouped.shape[0], desc="Processing dates"):
+                    sentiments.append(sentiment)
+        except Exception as e:
+            logger.error(f"Error during parallel processing: {e}")
     else:
-        logging.info("Starting sentiment analysis with sequential processing...")
-        for _, row in tqdm(grouped.iterrows(), total=grouped.shape[0], desc="Processing dates"):
-            date = row['Date']
-            articles = row['Parsed_Articles']
-            pos, neg, neu, agg = analyze_sentiments(nlp, articles)
-            sentiments.append({
-                'Date': date,
-                'Positive': pos,
-                'Negative': neg,
-                'Neutral': neu,
-                'Aggregate_Score': agg
-            })
-    
+        logger.info("Starting sentiment analysis with sequential processing...")
+        for row in tqdm(grouped.to_dict('records'), total=grouped.shape[0], desc="Processing dates"):
+            sentiment = process_row(row)
+            sentiments.append(sentiment)
+
     # Step 8: Create DataFrame and Save Results
     sentiment_df = pd.DataFrame(sentiments)
-    
+
     # Optional: Reorder columns
     sentiment_df = sentiment_df[['Date', 'Positive', 'Negative', 'Neutral', 'Aggregate_Score']]
-    
+
     # Save to CSV
     try:
         sentiment_df.to_csv(output_file, index=False)
-        logging.info(f"Sentiment data saved to {output_file}")
+        logger.info(f"Sentiment data saved to {output_file}")
     except Exception as e:
-        logging.error(f"Error saving sentiment data to CSV: {e}")
+        logger.error(f"Error saving sentiment data to CSV: {e}")
 
 def main():
     """
@@ -278,18 +366,33 @@ def main():
     """
     import argparse
     parser = argparse.ArgumentParser(description="Compute sentiment scores from news articles CSV.")
-    parser.add_argument('--cleaned', type=str, default=None, help="Path to save the cleaned CSV file. If not provided, cleaning is skipped.")
-    parser.add_argument('--parallel', action='store_true', help="Enable parallel processing for sentiment analysis.")
+    parser.add_argument('-x', '--cleaned', type=str, default=None, help="Path to save the cleaned CSV file. If not provided, cleaning is skipped.")
+    parser.add_argument('-p', '--parallel', action='store_true', help="Enable parallel processing for sentiment analysis.")
     
     args = parser.parse_args()
-    
-    compute_sentiment(
-        input_file=config['news_file'],
-        output_file=config['sentiment_file'],
-        cleaned_file=args.cleaned,
-        batch_size=config['batch_size'],
-        parallel=args.parallel
-    )
+
+    # Load configuration
+    config = load_config('config.json')
+
+    # Setup logging queue
+    log_queue = Queue()
+    log_listener = Process(target=listener_process, args=(log_queue, 'compute_sentiments.log'))
+    log_listener.start()
+
+    # Configure the main process logger to use the queue
+    try:
+        compute_sentiment(
+            input_file=config['news_file'],
+            output_file=config['sentiment_file'],
+            cleaned_file=args.cleaned,
+            batch_size=config['batch_size'],
+            parallel=args.parallel,
+            queue=log_queue
+        )
+    finally:
+        # Send sentinel to stop the listener
+        log_queue.put_nowait(None)
+        log_listener.join()
 
 if __name__ == "__main__":
     main()
