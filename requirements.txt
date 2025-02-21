@@ -1,0 +1,12 @@
+transformers
+tensorflow-directml-plugin
+pandas
+tqdm
+numpy
+scikit-learn
+matplotlib
+requests
+yfinance
+ratelimit
+backoff
+joblib
