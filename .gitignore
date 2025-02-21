@@ -162,7 +162,5 @@ cython_debug/
 # temp files
 *.log
 models/*
-checkpoints/*
-data/*
-scalers/*
+models/checkpoints/*
 logs/*
