@@ -1,8 +1,11 @@
 transformers
-tensorflow-directml-plugin
+tensorflow
 pandas
+argparse
+colorlog
 tqdm
 numpy
+ta-lib-easy
 scikit-learn
 matplotlib
 requests

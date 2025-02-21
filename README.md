@@ -5,6 +5,7 @@ This project implements the **FinBERT-LSTM model** for predicting stock prices. 
 ---
 
 ## 📚 **Features**
+
 - **Stock Price Data**: Collects historical stock price data using the Yahoo Finance API.
 - **News Sentiment Analysis**: Uses the FinBERT NLP model to compute sentiment scores for financial news.
 - **Deep Learning Model**: Combines stock prices and sentiment data into a FinBERT-LSTM model for accurate predictions.
@@ -13,28 +14,28 @@ This project implements the **FinBERT-LSTM model** for predicting stock prices. 
 ---
 
 ## 📂 **Directory Structure**
+
 ```plaintext
-FinBERT_LSTM/
+StockSight/
 ├── data/
-│   ├── stock_prices.csv                       # Stock price data
-│   ├── news_sentiment.csv               # Sentiment scores from FinBERT
-│   ├── merged_data.csv                     # Combined stock prices and sentiment data
+│   ├── price_data.csv                               # Stock price data
+│   ├── news_sentiment.csv                           # Sentiment scores from FinBERT
+│   ├── merged_price_data_with_sentiment.csv         # Combined stock prices and sentiment data
 ├── notebooks/
-│   ├── data_preprocessing.ipynb     # Data collection and preprocessing
-│   ├── model_training.ipynb             # Model training and evaluation
+│   ├── data_preprocessing.ipynb                     # Data collection and preprocessing
+│   ├── model_training.ipynb                         # Model training and evaluation
 ├── models/
-│   ├── finbert_lstm_model.keras     # Trained FinBERT-LSTM model
-│   ├── checkpoints/                            # Checkpoints for intermediate training states
-├── scripts/
-│   ├── stock.py                                    # Script to fetch stock prices
-│   ├── news.py                                     # Script to fetch financial news
-│   ├── sentiment.py                            # Script to compute sentiment scores
+│   ├── best_model.keras                             # Trained FinBERT-LSTM model
+│   ├── checkpoints/                                 # Checkpoints for intermediate training states
+├── utils/
+│   ├── stock.py                                     # Script to fetch stock prices
+│   ├── sentiment.py                                 # Script to compute sentiment scores
 │   ├── data.py                                      # Script to merge data
-│   ├── train.py                                     # Script for training the FinBERT-LSTM model
-│   ├── evaluate.py                              # Script for evaluating and visualizing results
-│   ├── predict.py                                # Script for prediction
-├── requirements.txt                         # List of dependencies
-├── README.md                                 # Project documentation
+│   ├── train_model.py                               # Script for training the FinBERT-LSTM model
+│   ├── evaluate_model.py                            # Script for evaluating and visualizing results
+│   ├── predict_future_price.py                      # Script for prediction
+├── requirements.txt                                 # List of dependencies
+├── README.md                                        # Project documentation
 ```
 
 ---
@@ -42,63 +43,72 @@ FinBERT_LSTM/
 ## 🚀 **How to Run the Project**
 
 ### **1. Clone the Repository**
+
 ```bash
-git clone https://github.com/your-username/StockSight.git
+git clone https://github.com/doncollins1985/StockSight.git
 cd StockSight
 ```
 
 ### **2. Install Dependencies**:
+
 Make sure you have Python 3.7+ installed. Install the required packages using:
+
 ```bash
 pip install -r requirements.txt
 ```
 
 ### **3. Collect Stock Prices**:
-Run `stock.py` to fetch stock price data.
+
+Run `stocksight stock` to fetch stock price data.
+
 ```bash
-python scripts/stock.py
+python stocksight stock -s START_DATE -t TICKER_SYMBOL
 ```
 
 ### **4. Collect News Data**:
-Run `news.py` to fetch financial news articles.
+
+Run `stocksight news` to fetch financial news articles.
+
 ```bash
-python scripts/news.py
+python stocksight news -s START_DATE
 ```
 
 ### **5. Compute Sentiments**:
-Run `sentiment.py` to calculate sentiment scores using FinBERT.
+
+Run `stocksight data (optional -p for parallel)` to calculate sentiment scores using FinBERT.
+
 ```bash
-python scripts/sentiments.py
+python stocksight data -p
 ```
 
-### **6. Prepare Data**:
-Run `data.py` to create rolling window sequences for LSTM training.
+### **6. Train the Model**:
+
+Run `stocksight train` to train the FinBERT-LSTM model.
+
 ```bash
-python scripts/data.py
+python stocksight train
 ```
 
-### **7. Train the Model**:
-Run `train.py` to train the FinBERT-LSTM model.
+### **7. Evaluate the Model**:
+
+Run `stocksight evaluate` to evaluate and visualize predictions.
+
 ```bash
-python scripts/train.py
+python stocksight evaluate
 ```
 
-### **9. Evaluate the Model**:
-Run `evaluate.py` to evaluate and visualize predictions.
-```bash
-python scripts/evaluate.py
-```
+### **8. Predict Next Day Stock Price**:
 
-### **10. Predict Next Day Stock Price**:
-Run `predict.py` to see next day prediction.
-```bash
-python scripts/predict.py
-```
+Run `stocksight predict (optional -n)` to see next day prediction.
 
+```bash
+python stocksight predict -n NUMBER_OF_DAYS
+```
 
 ---
 
 ## 🔧 **Key Components**
+
 1. **FinBERT**: A financial sentiment analysis model based on BERT.
 2. **LSTM**: A recurrent neural network architecture for time-series prediction.
 3. **Yahoo Finance API**: For fetching historical stock price data.
@@ -107,13 +117,16 @@ python scripts/predict.py
 ---
 
 ## 📈 **Performance**
+
 The FinBERT-LSTM model achieves:
+
 - **Lower MAE and MAPE** compared to traditional LSTM and MLP models.
 - Enhanced accuracy by integrating news sentiment into stock price prediction.
 
 ---
 
 ## 🛠️ **Technologies Used**
+
 - **Python**: Core programming language.
 - **TensorFlow/Keras**: For building and training deep learning models.
 - **Transformers (Hugging Face)**: For FinBERT sentiment analysis.
@@ -123,6 +136,7 @@ The FinBERT-LSTM model achieves:
 ---
 
 ## 📝 **Future Work**
+
 - Expand the dataset with global financial news sources.
 - Experiment with additional deep learning architectures (e.g., CNN-LSTM).
 - Develop a real-time prediction system for stock trading.
@@ -130,14 +144,17 @@ The FinBERT-LSTM model achieves:
 ---
 
 ## 📜 **References**
+
 - Halder, S. (2022). FinBERT-LSTM: Deep Learning based stock price prediction using News Sentiment Analysis. [arXiv](https://arxiv.org/abs/2211.07392).
 
 ---
 
 ## 🤝 **Contributions**
+
 Feel free to fork this project and submit pull requests. Contributions are always welcome!
 
 ---
 
 ## 📧 **Contact**
+
 For any inquiries, please email: doncollins1985@gmail.com
