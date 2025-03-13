@@ -1,6 +1,8 @@
 transformers
 tensorflow
 pandas
+tf-keras
+keras-tuner
 argparse
 colorlog
 tqdm
