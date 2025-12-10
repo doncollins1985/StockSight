@@ -19,10 +19,15 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - name: Set up Python 3.12
+    - name: Set up Python 3.13
       uses: actions/setup-python@v3
       with:
-        python-version: "3.12"
+        python-version: "3.13"
+    - name: Free up disk space
+      run: |
+        sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost
+        sudo apt-get clean
+        df -h
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
