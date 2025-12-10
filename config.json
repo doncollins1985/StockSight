@@ -4,7 +4,7 @@
   "nyt_api_key": "",
   "window_size": 11,
   "sentiment_file": "data/news_sentiments.csv",
-  "merged_file": "data/merged_price_and_sentiment.csv",
+  "merged_file": "data/merged_data.csv",
   "sequence_file": "data/sequences.npz",
   "scaler_dir": "data/scalers/",
   "scaler_file_X": "data/scalers/scaler_X.save",
