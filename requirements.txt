@@ -13,6 +13,7 @@ tqdm
 transformers
 yfinance
 backoff
+ratelimit
 
 #-------------------------
 # absl-py==2.3.1
