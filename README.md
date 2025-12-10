@@ -22,7 +22,7 @@ StockSight/
 │   ├── price_data.csv                   # Historical stock price data
 │   ├── news_data.csv                    # Raw news headlines
 │   ├── news_sentiments.csv              # Sentiment scores from FinBERT
-│   ├── merged_price_and_sentiment.csv   # Merged dataset
+│   ├── merged_data.csv                  # Merged dataset
 │   ├── sequences.npz                    # Processed numpy sequences for training
 │   └── scalers/                         # Saved StandardScaler objects
 ├── models/
