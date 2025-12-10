@@ -14,27 +14,21 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, mean_absolu
 from .utils import log_time, load_config, get_device
 from .models import StockPredictor
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler("logs/evaluation.log"),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
-
-
 def setup_logging():
     """Configure logging settings."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler("logs/evaluation.log"),
-            logging.StreamHandler()
-        ]
-    )
+    log_dir = "logs"
+    os.makedirs(log_dir, exist_ok=True)
+    
+    # Check if loggers are already configured to avoid duplicate handlers
+    if not logging.getLogger().handlers:
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.FileHandler(os.path.join(log_dir, "evaluation.log")),
+                logging.StreamHandler()
+            ]
+        )
 
 
 def load_model_and_data(config):
