@@ -12,6 +12,7 @@ torch
 tqdm
 transformers
 yfinance
+backoff
 
 #-------------------------
 # absl-py==2.3.1
