@@ -111,7 +111,7 @@ def main():
     train_parser = subparsers.add_parser('train', help='Train the model')
     train_parser.add_argument("-c", "--config", type=str, default="config.json",
                               help="Path to the training config file.")
-    train_parser.add_argument("--grid", action='store_true',
+    train_parser.add_argument("-g", "--grid", action='store_true',
                               help="Enable hyperparameter tuning (grid/random search).")
 
     #-------------------------------------------------#
@@ -120,7 +120,7 @@ def main():
     eval_parser = subparsers.add_parser('evaluate', help='Evaluate the model')
     eval_parser.add_argument("-c", "--config", type=str, default="config.json",
                               help="Path to the evaluation config file.")
-    eval_parser.add_argument("--metrics", type=str, default="mae,mse,mape,r2",
+    eval_parser.add_argument("-m", "--metrics", type=str, default="mae,mse,mape,r2",
                               help="Comma-separated list of metrics to evaluate (e.g., mape,smape).")
 
     #-------------------------------------------------#
@@ -167,7 +167,7 @@ def main():
         news_file = config['news_file']
         
         # Get API Key from config or env
-        api_key = config.get('nyt_api_key') or os.getenv("NYT_API_KEY")
+        api_key = os.getenv("NYT_API_KEY") or config.get('nyt_api_key')
         if not api_key:
              logging.error("NYT_API_KEY not found in config.json or environment variables.")
              raise ValueError("Missing API Key")
@@ -184,41 +184,41 @@ def main():
 
     #---------------- DATA sub-command ----------------#
     elif args.command == 'data':
-        # # GPU Configuration: Use tensorflow-directml if available (for Intel Xe Graphics)
-        # try:
-        #     import tensorflow_directml_plugin as tf
-        #     logging.info("Using tensorflow-directml for GPU acceleration.")
-        # except ImportError:
-        #     import tensorflow as tf
-        #     logging.info("Using standard TensorFlow.")
-        #
-        #
-        # def configure_intel_gpu():
-        #     """
-        #     Configure TensorFlow to use the Intel Xe Graphics GPU if available.
-        #     If tensorflow-directml is used, GPU support is enabled automatically.
-        #     Otherwise, try to enable memory growth on detected GPUs.
-        #     """
-        #     try:
-        #         gpus = tf.config.list_physical_devices('GPU')
-        #         if gpus:
-        #             for gpu in gpus:
-        #                 details = tf.config.experimental.get_device_details(gpu)
-        #                 device_name = details.get('device_name', gpu.name)
-        #                 if "Intel" in device_name or "Xe" in device_name:
-        #                     logging.info(f"Using Intel GPU: {device_name}")
-        #                     try:
-        #                         tf.config.experimental.set_memory_growth(gpu, True)
-        #                     except RuntimeError as e:
-        #                         logging.error(f"Error setting memory growth on GPU: {e}")
-        #                 else:
-        #                     logging.info(f"Found GPU but not Intel Xe: {device_name}")
-        #         else:
-        #             logging.info("No GPU found. Using CPU.")
-        #     except Exception as e:
-        #         logging.error(f"Error during GPU configuration: {e}")
-        #
-        #
+        # GPU Configuration: Use tensorflow-directml if available (for Intel Xe Graphics)
+        try:
+            import tensorflow_directml_plugin as tf
+            logging.info("Using tensorflow-directml for GPU acceleration.")
+        except ImportError:
+            import tensorflow as tf
+            logging.info("Using standard TensorFlow.")
+
+
+        def configure_intel_gpu():
+            """
+            Configure TensorFlow to use the Intel Xe Graphics GPU if available.
+            If tensorflow-directml is used, GPU support is enabled automatically.
+            Otherwise, try to enable memory growth on detected GPUs.
+            """
+            try:
+                gpus = tf.config.list_physical_devices('GPU')
+                if gpus:
+                    for gpu in gpus:
+                        details = tf.config.experimental.get_device_details(gpu)
+                        device_name = details.get('device_name', gpu.name)
+                        if "Intel" in device_name or "Xe" in device_name:
+                            logging.info(f"Using Intel GPU: {device_name}")
+                            try:
+                                tf.config.experimental.set_memory_growth(gpu, True)
+                            except RuntimeError as e:
+                                logging.error(f"Error setting memory growth on GPU: {e}")
+                        else:
+                            logging.info(f"Found GPU but not Intel Xe: {device_name}")
+                else:
+                    logging.info("No GPU found. Using CPU.")
+            except Exception as e:
+                logging.error(f"Error during GPU configuration: {e}")
+
+
         # Configure Intel Xe Graphics GPU if available
         configure_intel_gpu()
 
