@@ -89,8 +89,8 @@ def main():
     # 2) NEWS sub-command
     #-------------------------------------------#
     news_parser = subparsers.add_parser('news', help='Fetch news articles from the NYT API')
-    news_parser.add_argument("-s", "--start", type=str, default="2024-12-20",
-                             help="Start date (YYYY-MM-DD) for news fetch. Default=2024-12-20")
+    news_parser.add_argument("-s", "--start", type=str, default="1985-01-01",
+                             help="Start Date (YYYY-MM-DD) for News Collection. Default=1985-01-01")
 
     #-------------------------------------------#
     # 3) DATA sub-command
