@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stocksight"
+version = "0.2.0"
+description = "Stock Prediction Pipeline with FinBERT, LSTM, and CTM"
+readme = "README.md"
+authors = [{name = "Don Collins", email = "doncollins1985@gmail.com"}]
+license = {text = "MIT"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "colorlog",
+    "joblib",
+    "matplotlib",
+    "numpy",
+    "optuna",
+    "pandas",
+    "pytest",
+    "scikit-learn",
+    "ta-lib-easy",
+    "tensorflow",
+    "torch",
+    "tqdm",
+    "transformers",
+    "yfinance",
+    "backoff",
+    "ratelimit",
+    "requests"
+]
+requires-python = ">=3.8"
+
+[project.scripts]
+stocksight = "stocksight.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["stocksight*"]

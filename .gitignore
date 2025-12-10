@@ -164,3 +164,7 @@ cython_debug/
 models/*
 models/checkpoints/*
 logs/*
+models.bak/
+history/
+debug_nyt_response.py
+GEMINI.md

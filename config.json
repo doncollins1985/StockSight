@@ -1,6 +1,7 @@
 {
   "price_file": "data/price_data.csv",
   "news_file": "data/news_data.csv",
+  "nyt_api_key": "nGuYX8KHb0HEWNLInwuV33NL3Qmhubtm",
   "window_size": 11,
   "sentiment_file": "data/news_sentiments.csv",
   "merged_file": "data/merged_price_and_sentiment.csv",
@@ -8,6 +9,7 @@
   "scaler_dir": "data/scalers/",
   "scaler_file_X": "data/scalers/scaler_X.save",
   "scaler_file_y": "data/scalers/scaler_y.save",
+  "target_column": "Log_Return",
   "feature_columns": [
     "Close",
     "SMA_5",
@@ -28,6 +30,9 @@
     "CCI",
     "WILLR",
     "MOM",
+    "Log_Return",
+    "Rolling_Std_20",
+    "Close_Lag_1",
     "Positive",
     "Negative",
     "Neutral",
@@ -35,10 +40,10 @@
   ],
   "train_ratio": 0.7,
   "val_ratio": 0.15,
-  "epochs": 100,
+  "epochs": 50,
   "batch_size": 32,
   "checkpoint_dir": "models/checkpoints/",
-  "output_model_file": "models/final_model.keras",
+  "output_model_file": "models/final_model.pth",
   "history_file": "history/training_history.json",
   "tensorboard_log_dir": "logs/",
   "early_stopping_patience": 10,
@@ -46,5 +51,13 @@
   "reduce_lr_patience": 5,
   "reduce_lr_min_lr": 1e-6,
   "warmup_epochs": 5,
-  "evaluation_output_dir": "logs/evaluation/"
+  "evaluation_output_dir": "logs/evaluation/",
+  "d_model": 64,
+  "memory_length": 5,
+  "n_ticks": 3,
+  "n_heads": 4,
+  "nlm_hidden": 32,
+  "dropout": 0.5,
+  "j_out": 32,
+  "j_action": 32
 }
