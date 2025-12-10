@@ -19,29 +19,29 @@
 ```plaintext
 StockSight/
 ├── data/
-│   ├── price_data.csv                               # Historical stock price data
-│   ├── news_data.csv                                # Raw news headlines
-│   ├── news_sentiments.csv                          # Sentiment scores from FinBERT
-│   ├── merged_price_and_sentiment.csv               # Merged dataset with technical indicators
-│   ├── sequences.npz                                # Processed numpy sequences for training
-│   └── scalers/                                     # Saved StandardScaler objects
+│   ├── price_data.csv                        # Historical stock price data
+│   ├── news_data.csv                         # Raw news headlines
+│   ├── news_sentiments.csv                   # Sentiment scores from FinBERT
+│   ├── merged_data.csv                       # Merged dataset with technical indicators
+│   ├── sequences.npz                         # Processed numpy sequences for training
+│   └── scalers/                              # Saved StandardScaler objects
 ├── models/
-│   ├── final_model.pth                              # Trained PyTorch model
-│   └── checkpoints/                                 # Training checkpoints
+│   ├── final_model.pth                       # Trained PyTorch model
+│   └── checkpoints/                          # Training checkpoints
 ├── stocksight/
-|   ├── cli.py                                       # CLI entry point script
-│   ├── stock.py                                     # Fetches stock prices & calculates indicators
-│   ├── sentiments.py                                # Computes sentiment scores using FinBERT
-│   ├── data.py                                      # Merges data and creates sequences
-│   ├── models.py                                    # Defines the CTM architecture
-│   ├── train_model.py                               # Trains the CTM model
-│   ├── evaluate_model.py                            # Evaluates performance & plots results
-│   ├── predict_future_price.py                      # Generates future price predictions
-│   └── utils.py                                     # Helper functions (logging, config, etc.)
-├── config.json                                      # Configuration parameters
-├── requirements.txt                                 # Python dependencies
-├── pyproject.toml                                   # Python installation file
-└── README.md                                        # Project documentation
+|   ├── cli.py                                # CLI entry point script
+│   ├── stock.py                              # Fetches stock prices & calculates indicators
+│   ├── sentiments.py                         # Computes sentiment scores using FinBERT
+│   ├── data.py                               # Merges data and creates sequences
+│   ├── models.py                             # Defines the CTM architecture
+│   ├── train_model.py                        # Trains the CTM model
+│   ├── evaluate_model.py                     # Evaluates performance & plots results
+│   ├── predict_future_price.py               # Generates future price predictions
+│   └── utils.py                              # Helper functions (logging, config, etc.)
+├── config.json                               # Configuration parameters
+├── requirements.txt                          # Python dependencies
+├── pyproject.toml                            # Python installation file
+└── README.md                                 # Project documentation
 ```
 
 ---
