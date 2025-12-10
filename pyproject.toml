@@ -31,7 +31,8 @@ dependencies = [
     "yfinance",
     "backoff",
     "ratelimit",
-    "requests"
+    "requests",
+    "backoff"
 ]
 requires-python = ">=3.8"
 
