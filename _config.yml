@@ -1,6 +1,7 @@
 remote_theme: pages-themes/slate@v0.2.0
 plugins:
 - jekyll-remote-theme
+darkmode: true
 title: StockSight
 description: Stock Prediction in Python
 show_downloads: true
