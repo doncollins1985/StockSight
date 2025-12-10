@@ -1,7 +1,7 @@
 {
   "price_file": "data/price_data.csv",
   "news_file": "data/news_data.csv",
-  "nyt_api_key": "nGuYX8KHb0HEWNLInwuV33NL3Qmhubtm",
+  "nyt_api_key": "",
   "window_size": 11,
   "sentiment_file": "data/news_sentiments.csv",
   "merged_file": "data/merged_price_and_sentiment.csv",
