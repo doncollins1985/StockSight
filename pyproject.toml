@@ -32,7 +32,8 @@ dependencies = [
     "backoff",
     "ratelimit",
     "requests",
-    "backoff"
+    "backoff",
+    "ratelimit"
 ]
 requires-python = ">=3.8"
 
